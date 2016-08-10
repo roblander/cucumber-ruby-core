@@ -6,13 +6,14 @@ module Cucumber
   module Core
     module Test
       class Case
-        attr_reader :source, :test_steps, :around_hooks
+        attr_reader :source, :test_steps, :around_hooks, :around_step_hooks
 
-        def initialize(test_steps, source, around_hooks = [])
+        def initialize(test_steps, source, around_hooks = [], around_step_hooks = [])
           raise ArgumentError.new("test_steps should be an Array but is a #{test_steps.class}") unless test_steps.kind_of?(Array)
           @test_steps = test_steps
           @source = source
           @around_hooks = around_hooks
+          @around_step_hooks = around_step_hooks
         end
 
         def step_count
@@ -23,7 +24,9 @@ module Cucumber
           visitor.test_case(self, *args) do |child_visitor|
             compose_around_hooks(child_visitor, *args) do
               test_steps.each do |test_step|
-                test_step.describe_to(child_visitor, *args)
+                compose_around_step_hooks(child_visitor, *args) do
+                  test_step.describe_to(child_visitor, *args)
+                end
               end
             end
           end
@@ -38,17 +41,21 @@ module Cucumber
         end
 
         def with_steps(test_steps)
-          self.class.new(test_steps, source, around_hooks)
+          self.class.new(test_steps, source, around_hooks, around_step_hooks)
         end
 
         def with_around_hooks(around_hooks)
-          self.class.new(test_steps, source, around_hooks)
+          self.class.new(test_steps, source, around_hooks, around_step_hooks)
+        end
+
+        def with_around_step_hooks(around_step_hooks)
+          self.class.new(test_steps, source, around_hooks, around_step_hooks)
         end
 
         def name
           @name ||= NameBuilder.new(self).result
         end
-        
+
         def keyword
           @keyword ||= NameBuilder.new(self).keyword
         end
@@ -103,6 +110,12 @@ module Cucumber
 
         def compose_around_hooks(visitor, *args, &block)
           around_hooks.reverse.reduce(block) do |continue, hook|
+            -> { hook.describe_to(visitor, *args, &continue) }
+          end.call
+        end
+
+        def compose_around_step_hooks(visitor, *args, &block)
+          around_step_hooks.reverse.reduce(block) do |continue, hook|
             -> { hook.describe_to(visitor, *args, &continue) }
           end.call
         end
