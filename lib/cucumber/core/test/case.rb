@@ -24,7 +24,7 @@ module Cucumber
           visitor.test_case(self, *args) do |child_visitor|
             compose_around_hooks(child_visitor, *args) do
               test_steps.each do |test_step|
-                compose_around_step_hooks(child_visitor, *args) do
+                compose_around_step_hooks(test_step) do
                   test_step.describe_to(child_visitor, *args)
                 end
               end
@@ -114,9 +114,9 @@ module Cucumber
           end.call
         end
 
-        def compose_around_step_hooks(visitor, *args, &block)
+        def compose_around_step_hooks(test_step, &block)
           around_step_hooks.reverse.reduce(block) do |continue, hook|
-            -> { hook.describe_to(visitor, *args, &continue) }
+            -> { hook.execute(test_step, &continue) }
           end.call
         end
 
